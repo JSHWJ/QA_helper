@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+dist/
+build/
+*.spec
+node_modules/
+__pycache__/
