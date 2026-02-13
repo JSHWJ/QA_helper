@@ -1,6 +1,6 @@
 import pandas as pd
 from pathlib import Path
-from app_modules.dash_logic import build_compare_dataframe, read_dictionary, read_json_map
+from app_modules.compare_logic import build_compare_dataframe, read_dictionary, read_json_map
 
 base = Path(r"C:\Users\rotemSRS\Desktop\automatic_tool_storage")
 d, _ = read_dictionary(base / "dictionary_latest.xlsx")

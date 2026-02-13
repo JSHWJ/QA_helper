@@ -204,13 +204,7 @@ def build_compare_dataframe(
     out["수정상태"] = ""
     out["수정일시"] = ""
 
-    out["_module_norm"] = out["Main Module"].apply(normalize_text)
-    out["_module_blank"] = out["_module_norm"].eq("")
-    out = out.sort_values(
-        by=["_module_blank", "_module_norm", "순번"],
-        ascending=[True, True, True],
-        kind="stable",
-    ).drop(columns=["_module_norm", "_module_blank"])
+    out = out.sort_values(by=["순번"], ascending=[True], kind="stable")
 
     final_columns = [
         "순번",

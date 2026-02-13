@@ -8,3 +8,5 @@ build/
 *.spec
 node_modules/
 __pycache__/
+.env
+.automatic_tool_config.json

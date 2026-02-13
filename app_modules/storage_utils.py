@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+from functools import lru_cache
 
 
 # 로컬 저장 위치(데스크탑 우선)를 관리하는 모듈
@@ -10,8 +11,38 @@ from pathlib import Path
 CONFIG_FILE_NAME = ".automatic_tool_config.json"
 
 
+@lru_cache(maxsize=1)
+def _dotenv_values() -> dict[str, str]:
+    env_path = Path.cwd() / ".env"
+    if not env_path.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    try:
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip("'").strip('"')
+            if key:
+                values[key] = value
+    except Exception:
+        return {}
+    return values
+
+
+def _get_env(name: str) -> str | None:
+    env_val = os.environ.get(name)
+    if env_val:
+        return env_val
+    dotenv_val = _dotenv_values().get(name)
+    return dotenv_val if dotenv_val else None
+
+
 def _config_file_path() -> Path:
-    env_path = os.environ.get("AUTOMATIC_TOOL_CONFIG")
+    env_path = _get_env("AUTOMATIC_TOOL_CONFIG")
     if env_path:
         return Path(env_path).expanduser().resolve()
     return Path.cwd() / CONFIG_FILE_NAME
@@ -49,7 +80,7 @@ def resolve_storage_dir(preferred: str | Path | None = None) -> Path:
         target.mkdir(parents=True, exist_ok=True)
         return target
 
-    env_storage = os.environ.get("AUTOMATIC_TOOL_STORAGE_DIR")
+    env_storage = _get_env("AUTOMATIC_TOOL_STORAGE_DIR")
     if env_storage:
         target = Path(env_storage).expanduser().resolve()
         target.mkdir(parents=True, exist_ok=True)
@@ -93,10 +124,30 @@ def save_uploaded_file(uploaded_file, alias_name: str, storage_dir: str | Path |
 
 def get_saved_file_path(alias_name: str, storage_dir: str | Path | None = None):
     storage_dir = resolve_storage_dir(storage_dir)
+    # 1) 내부 고정 별칭 파일 우선(dictionary_latest.*, ko_latest.* ...)
     matches = sorted(storage_dir.glob(f"{alias_name}.*"))
-    if not matches:
+    if matches:
+        return matches[-1]
+
+    # 2) 폴더 내 일반 파일명도 자동 탐색(사용자가 폴더만 지정해도 자동 재사용)
+    fallback_patterns: dict[str, list[str]] = {
+        "dictionary_latest": ["dictionary*.xlsx", "dictionary*.csv", "dictionary*.tsv", "*.xlsx", "*.csv", "*.tsv"],
+        "ko_latest": ["ko.json", "ko*.json"],
+        "ru_latest": ["ru.json", "ru*.json"],
+        "en_latest": ["en.json", "en*.json"],
+    }
+
+    patterns = fallback_patterns.get(alias_name, [])
+    fallback_candidates: list[Path] = []
+    for pattern in patterns:
+        fallback_candidates.extend([p for p in storage_dir.glob(pattern) if p.is_file()])
+
+    if not fallback_candidates:
         return None
-    return matches[-1]
+
+    # 최근 수정 파일을 우선 사용
+    fallback_candidates.sort(key=lambda p: p.stat().st_mtime)
+    return fallback_candidates[-1]
 
 
 def current_timestamp_text() -> str:
